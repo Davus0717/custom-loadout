@@ -410,28 +410,30 @@ save_loadout = menu.action(menu.my_root(), "Save Loadout", {}, "save all current
             file:write("return {" .. charE)
             for category, weapon in pairs(weapons_table) do
                 for n, weapon_hash in pairs(weapon) do
-                    file:write(charS .. "[" .. weapon_hash .. "] = ")
-                    WEAPON.SET_CURRENT_PED_WEAPON(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, true)
-                    util.yield(100)
-                    local num_attachments = 0
-                    for attachment_hash, attachment_name in pairs(attachments_table) do
-                        if (WEAPON.DOES_WEAPON_TAKE_WEAPON_COMPONENT(weapon_hash, attachment_hash)) then
-                            util.yield(10)
-                            if WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, attachment_hash) then
-                                num_attachments = num_attachments + 1
-                                if num_attachments == 1 then
-                                    file:write("{")
-                                else
-                                    file:write(",")
+                    if WEAPON.HAS_PED_GOT_WEAPON(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, false) then
+                        file:write(charS .. "[" .. weapon_hash .. "] = ")
+                        WEAPON.SET_CURRENT_PED_WEAPON(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, true)
+                        util.yield(100)
+                        local num_attachments = 0
+                        for attachment_hash, attachment_name in pairs(attachments_table) do
+                            if (WEAPON.DOES_WEAPON_TAKE_WEAPON_COMPONENT(weapon_hash, attachment_hash)) then
+                                util.yield(10)
+                                if WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, attachment_hash) then
+                                    num_attachments = num_attachments + 1
+                                    if num_attachments == 1 then
+                                        file:write("{")
+                                    else
+                                        file:write(",")
+                                    end
+                                    file:write(charE .. charS .. charS .. "[" .. num_attachments .. "] = " .. attachment_hash)
                                 end
-                                file:write(charE .. charS .. charS .. "[" .. num_attachments .. "] = " .. attachment_hash)
                             end
                         end
-                    end
-                    if num_attachments > 0 then
-                        file:write(charE .. charS .. "}," .. charE)
-                    else
-                        file:write("nil," .. charE)
+                        if num_attachments > 0 then
+                            file:write(charE .. charS .. "}," .. charE)
+                        else
+                            file:write("{nil}," .. charE)
+                        end
                     end
                 end
             end
@@ -441,7 +443,6 @@ save_loadout = menu.action(menu.my_root(), "Save Loadout", {}, "save all current
         end
 )
 
---TODO: seems like some weapons aren't loaded, heavy weapons for example.. why is that?
 load_loadout = menu.action(menu.my_root(), "load Loadout", {"loadloadout"}, "equip every weapon of the last save",
         function()
             util.toast("loading your weapons..")
@@ -450,7 +451,7 @@ load_loadout = menu.action(menu.my_root(), "load Loadout", {"loadloadout"}, "equ
             local loadout_table = require("store\\" .. "loadout")
             for w_hash, attach in pairs(loadout_table) do
                 WEAPON.GIVE_WEAPON_TO_PED(player, w_hash, 10, false, true)
-                if attach ~= nil then
+                if attach[1] ~= nil then
                     for n, a_hash in pairs(attach) do
                         WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(player, w_hash, a_hash)
                         util.yield(10)
@@ -462,7 +463,7 @@ load_loadout = menu.action(menu.my_root(), "load Loadout", {"loadloadout"}, "equ
         end
 )
 
---TODO: find out how the state of autoload can be saved in the profile.. well, it's working for other scripts. save the state of do_autoload somewhere?
+--TODO: find out how the state of autoload can be saved in the profile.. well, it's working for other scripts. save the state of do_autoload somewhere? Edit: Well, recently it worked anyways. Keep eyes on it
 auto_load = menu.toggle(menu.my_root(), "auto-load", {}, "Automatically loads the current config when you inject the menu (or start the script)",
         function(on)
             do_autoload = on
