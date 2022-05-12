@@ -4,11 +4,10 @@
 --- This script extends functionalities of the weapon-attachments.lua, whose author I don't know tho
 ---
 
----require("natives-1627063482")
 util.require_natives(1627063482)--TODO: maybe update the used natives? Look if it breaks anything that's actually working rn
 local last_equipped_weapon = WEAPON.GET_SELECTED_PED_WEAPON(PLAYER.GET_PLAYER_PED(players.user())) --obsolete?
 local weapons_table = require("weapons")
-local STOREDIR = filesystem.store_dir() --- not using this much, consider moving it to the 1 location it's used in..
+local STOREDIR = filesystem.store_dir() --- not using this much, consider moving it to the 2 locations it's used in..
 local do_autoload = false
 
 local attachments_table = {
@@ -403,7 +402,7 @@ local attachments_table = {
 
 
 
-save_loadout = menu.action(menu.my_root(), "Save Loadout", {}, "save all currently equipped weapons and their attachments to be loaded in the future",
+save_loadout = menu.action(menu.my_root(), "Save Loadout", {}, "Save all currently equipped weapons and their attachments to be loaded in the future",
         function()
             local charS,charE = "   ","\n"
             file = io.open(STOREDIR .. "loadout.lua", "wb")
@@ -443,28 +442,32 @@ save_loadout = menu.action(menu.my_root(), "Save Loadout", {}, "save all current
         end
 )
 
-load_loadout = menu.action(menu.my_root(), "load Loadout", {"loadloadout"}, "equip every weapon of the last save",
+load_loadout = menu.action(menu.my_root(), "load Loadout", {"loadloadout"}, "Equip every weapon of the last save",
         function()
-            util.toast("loading your weapons..")
-            player = PLAYER.GET_PLAYER_PED(players.user())
-            WEAPON._SET_CAN_PED_EQUIP_ALL_WEAPONS(player, true)
-            local loadout_table = require("store\\" .. "loadout")
-            for w_hash, attach in pairs(loadout_table) do
-                WEAPON.GIVE_WEAPON_TO_PED(player, w_hash, 10, false, true)
-                if attach[1] ~= nil then
-                    for n, a_hash in pairs(attach) do
-                        WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(player, w_hash, a_hash)
-                        util.yield(10)
+            if filesystem.exists(STOREDIR .. "loadout.lua") then
+                util.toast("loading your weapons..")
+                player = PLAYER.GET_PLAYER_PED(players.user())
+                WEAPON._SET_CAN_PED_EQUIP_ALL_WEAPONS(player, true)
+                local loadout_table = require("store\\" .. "loadout")
+                for w_hash, attach in pairs(loadout_table) do
+                    WEAPON.GIVE_WEAPON_TO_PED(player, w_hash, 10, false, true)
+                    if attach[1] ~= nil then
+                        for n, a_hash in pairs(attach) do
+                            WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(player, w_hash, a_hash)
+                            util.yield(10)
+                        end
                     end
                 end
+                regen_menu()
+                util.toast("loadout equipped")
+            else
+                util.toast("You never saved a loadout before.. what should I load *.*")
             end
-            regen_menu()
-            util.toast("loadout equipped")
         end
 )
 
 --TODO: find out how the state of autoload can be saved in the profile.. well, it's working for other scripts. save the state of do_autoload somewhere? Edit: Well, recently it worked anyways. Keep eyes on it
-auto_load = menu.toggle(menu.my_root(), "auto-load", {}, "Automatically loads the current config when you inject the menu (or start the script)",
+auto_load = menu.toggle(menu.my_root(), "auto-load", {}, "Automatically equips every weapon of your last save when you join a new session",
         function(on)
             do_autoload = on
         end
@@ -510,20 +513,17 @@ function generate_for_new_weapon(category, weapon_name, weapon_hash)
     )
 end
 
---TODO: can curr_equipped_weapon be replaced by the weapon_hash parameter?
 function generate_attachments(weapon_name, weapon_hash)
     for attachment_hash, attachment_name in pairs(attachments_table) do
-        local curr_equipped_weapon = WEAPON.GET_SELECTED_PED_WEAPON(PLAYER.GET_PLAYER_PED(players.user()))
-        if (WEAPON.DOES_WEAPON_TAKE_WEAPON_COMPONENT(curr_equipped_weapon, attachment_hash)) then
-            if (attachments[weapon_name .. attachment_name] ~= nil) then menu.delete(attachments[weapon_name .. attachment_name]) end --- throws an error on bulluprifle_mk2 when loadout has been loaded and edit attachments action is triggered?
+        if (WEAPON.DOES_WEAPON_TAKE_WEAPON_COMPONENT(weapon_hash, attachment_hash)) then
+            if (attachments[weapon_name .. attachment_name] ~= nil) then menu.delete(attachments[weapon_name .. attachment_name]) end
             attachments[weapon_name .. attachment_name] = menu.action(weapons[weapon_name], attachment_name, {}, "Equip " .. attachment_name .. " on your " .. weapon_name,
                     function()
-                        WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(PLAYER.GET_PLAYER_PED(players.user()), curr_equipped_weapon, attachment_hash)
+                        WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, attachment_hash)
                         util.yield(1)
                         if string.find(attachment_name, "Rounds") ~= nil and WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, attachment_hash) then
-                            --if the type of rounds is changed, the player needs some bullets of the new type to be able to use them
+                            ---if the type of rounds is changed, the player needs some bullets of the new type to be able to use them
                             util.toast("reloaded " .. weapon_name .. " due to new ammo type")
-                            curr_equipped_weapon = WEAPON.GET_SELECTED_PED_WEAPON(PLAYER.GET_PLAYER_PED(players.user()))
                             WEAPON.ADD_AMMO_TO_PED(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, 10)
                         end
                     end
@@ -543,7 +543,7 @@ categories = {}
 weapons = {}
 attachments = {}
 for category, weapon in pairs(weapons_table) do
-    categories[category] = menu.list(menu.my_root(), category, {}, "Edit the " .. category .. " category")
+    categories[category] = menu.list(menu.my_root(), category, {}, "Edit weapons of the " .. category .. " category")
     for weapon_name, weapon_hash in pairs(weapon) do
         if WEAPON.HAS_PED_GOT_WEAPON(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, false) == true then
             generate_for_new_weapon(category, weapon_name, weapon_hash)
@@ -558,16 +558,16 @@ for category, weapon in pairs(weapons_table) do
     end
 end
 
---util.keep_running() --- instead a loop for autoload
-
 while true do
-    if do_autoload then
-        if NETWORK.NETWORK_IS_IN_SESSION() == false then
-            while NETWORK.NETWORK_IS_IN_SESSION() == false or util.is_session_transition_active() do
-                util.yield(1000)
-            end
-            util.yield(10000)---wait until even the clownish animation on spawn is definitely finished..
+    if NETWORK.NETWORK_IS_IN_SESSION() == false then
+        while NETWORK.NETWORK_IS_IN_SESSION() == false or util.is_session_transition_active() do
+            util.yield(1000)
+        end
+        util.yield(10000)---wait until even the clownish animation on spawn is definitely finished..
+        if do_autoload then
             menu.trigger_commands("loadloadout")
+        else
+            regen_menu()
         end
     end
     util.yield()
