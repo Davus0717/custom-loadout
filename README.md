@@ -1,4 +1,4 @@
-# custom-loadouts
+# custom-loadout
 A weapon management Lua for Stand
 
 ---
