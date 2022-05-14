@@ -3,7 +3,8 @@ A weapon management Lua for Stand
 
 ---
 
-Tired of having to manually equip every weapon you need on every session you join or having to buy them completely in the end?
+Tired of having to manually equip every weapon you need on every session you join or having to buy them completely in the end?   
+Or worse.. your weapons got taken away..   
 **Now there's a solution**.   
 
 ---
@@ -25,4 +26,5 @@ once loaded,
 ---
 
 ### How do I install the Script?
-For this, head over to the [tutorial page](https://support-docs.stand.gg/installing-luas/) and take a look at the ***manual installation*** guide.
+For this, head over to the [tutorial page](https://support-docs.stand.gg/installing-luas/) and take a look at the ***manual installation*** guide.   
+Short: drag everything from src into the "%appdata%\Stand\Lua Scripts" folder.
