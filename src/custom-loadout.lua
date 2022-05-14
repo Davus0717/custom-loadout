@@ -3,9 +3,10 @@
 ---
 --- This script utilizes some functionalities of the weapon-attachments.lua, whose author I don't know tho
 ---
+--- Version 1.0
+---
 
-util.require_natives(1627063482)--TODO: maybe update the used natives? Look if it breaks anything that's actually working rn
-local last_equipped_weapon = WEAPON.GET_SELECTED_PED_WEAPON(PLAYER.GET_PLAYER_PED(players.user())) --obsolete?
+util.require_natives(1627063482)--TODO: maybe update the used natives in the future? Look if it breaks anything that's actually working rn
 local weapons_table = require("weapons")
 local STOREDIR = filesystem.store_dir() --- not using this much, consider moving it to the 2 locations it's used in..
 local do_autoload = false
@@ -490,14 +491,13 @@ function regen_menu()
                         end
                 )
             end
-            WEAPON.ADD_AMMO_TO_PED(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, 10) --- if a new ammo type has been equipped.. it should get some ammo
+            WEAPON.ADD_AMMO_TO_PED(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, 10) --- if a special ammo type has been equipped.. it should get some ammo
         end
     end
 end
 
-function equip_comp(weapon_name, weapon_hash, attachment_name, attachment_hash)
-    local curr_equipped_weapon = WEAPON.GET_SELECTED_PED_WEAPON(PLAYER.GET_PLAYER_PED(players.user()))
-    WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(PLAYER.GET_PLAYER_PED(players.user()), curr_equipped_weapon, attachment_hash)
+function equip_comp(weapon_name, weapon_hash, attachment_hash)
+    WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, attachment_hash)
     generate_attachments(weapon_name, weapon_hash)
 end
 
@@ -522,12 +522,12 @@ function generate_attachments(weapon_name, weapon_hash)
             if (attachments[weapon_name .. attachment_name] ~= nil) then menu.delete(attachments[weapon_name .. attachment_name]) end
             attachments[weapon_name .. attachment_name] = menu.action(weapons[weapon_name], attachment_name, {}, "Equip " .. attachment_name .. " on your " .. weapon_name,
                     function()
-                        WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, attachment_hash)
+                        equip_comp(weapon_name, weapon_hash, attachment_hash)
                         util.yield(1)
                         if string.find(attachment_name, "Rounds") ~= nil and WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, attachment_hash) then
-                            ---if the type of rounds is changed, the player needs some bullets of the new type to be able to use them
-                            util.toast("reloaded " .. weapon_name .. " due to new ammo type")
+                            --- if the type of rounds is changed, the player needs some bullets of the new type to be able to use them
                             WEAPON.ADD_AMMO_TO_PED(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, 10)
+                            util.toast("gave " .. weapon_name .. " some rounds due to new ammo type")
                         end
                     end
             )
@@ -568,7 +568,7 @@ while true do
         while NETWORK.NETWORK_IS_IN_SESSION() == false or util.is_session_transition_active() do
             util.yield(1000)
         end
-        util.yield(10000)---wait until even the clownish animation on spawn is definitely finished..
+        util.yield(10000) --- wait until even the clownish animation on spawn is definitely finished..
         if do_autoload then
             menu.trigger_commands("loadloadout")
         else
