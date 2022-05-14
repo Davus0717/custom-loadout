@@ -1,7 +1,7 @@
 ---
 --- Created by Davus.
 ---
---- This script extends functionalities of the weapon-attachments.lua, whose author I don't know tho
+--- This script utilizes some functionalities of the weapon-attachments.lua, whose author I don't know tho
 ---
 
 util.require_natives(1627063482)--TODO: maybe update the used natives? Look if it breaks anything that's actually working rn
@@ -466,7 +466,6 @@ load_loadout = menu.action(menu.my_root(), "load Loadout", {"loadloadout"}, "Equ
         end
 )
 
---TODO: find out how the state of autoload can be saved in the profile.. well, it's working for other scripts. save the state of do_autoload somewhere? Edit: Well, recently it worked anyways. Keep eyes on it
 auto_load = menu.toggle(menu.my_root(), "auto-load", {}, "Automatically equips every weapon of your last save when you join a new session",
         function(on)
             do_autoload = on
@@ -475,7 +474,9 @@ auto_load = menu.toggle(menu.my_root(), "auto-load", {}, "Automatically equips e
 
 function regen_menu()
     for category, weapon in pairs(weapons_table) do
+        category = string.gsub(category, "_", " ")
         for weapon_name, weapon_hash in pairs(weapon) do
+            weapon_name = string.gsub(weapon_name, "_", " ")
             menu.delete(weapons[weapon_name])
             if WEAPON.HAS_PED_GOT_WEAPON(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, false) == true then
                 generate_for_new_weapon(category, weapon_name, weapon_hash)
@@ -543,8 +544,10 @@ categories = {}
 weapons = {}
 attachments = {}
 for category, weapon in pairs(weapons_table) do
+    category = string.gsub(category, "_", " ")
     categories[category] = menu.list(menu.my_root(), category, {}, "Edit weapons of the " .. category .. " category")
     for weapon_name, weapon_hash in pairs(weapon) do
+        weapon_name = string.gsub(weapon_name, "_", " ")
         if WEAPON.HAS_PED_GOT_WEAPON(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, false) == true then
             generate_for_new_weapon(category, weapon_name, weapon_hash)
         else
