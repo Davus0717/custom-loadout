@@ -472,6 +472,8 @@ auto_load = menu.toggle(menu.my_root(), "auto-load", {}, "Automatically equips e
         end
 )
 
+menu.divider(menu.my_root(), "Edit Weapons")
+
 function regen_menu()
     for category, weapon in pairs(weapons_table) do
         category = string.gsub(category, "_", " ")
