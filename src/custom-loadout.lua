@@ -3,7 +3,7 @@
 ---
 --- This script utilizes some functionalities of the weapon-attachments.lua, whose author I don't know tho
 ---
---- Version 1.0
+--- Version 1.1
 ---
 
 util.require_natives(1627063482)--TODO: maybe update the used natives in the future? Look if it breaks anything that's actually working rn
@@ -443,11 +443,12 @@ save_loadout = menu.action(menu.my_root(), "Save Loadout", {}, "Save all current
         end
 )
 
-load_loadout = menu.action(menu.my_root(), "load Loadout", {"loadloadout"}, "Equip every weapon of the last save",
+load_loadout = menu.action(menu.my_root(), "Load Loadout", {"loadloadout"}, "Equip every weapon of the last save",
         function()
             if filesystem.exists(STOREDIR .. "loadout.lua") then
                 util.toast("loading your weapons..")
                 player = PLAYER.GET_PLAYER_PED(players.user())
+                WEAPON.REMOVE_ALL_PED_WEAPONS(player, false)
                 WEAPON._SET_CAN_PED_EQUIP_ALL_WEAPONS(player, true)
                 local loadout_table = require("store\\" .. "loadout")
                 for w_hash, attach in pairs(loadout_table) do
@@ -464,18 +465,29 @@ load_loadout = menu.action(menu.my_root(), "load Loadout", {"loadloadout"}, "Equ
             else
                 util.toast("You never saved a loadout before.. what should I load *.*")
             end
+            package.loaded["store\\loadout"] = nil --- load_loadout should always get the current state of loadout.lua, therefore always load it again or else the last required table would be taken, as it has already been loaded before..
         end
 )
 
-auto_load = menu.toggle(menu.my_root(), "auto-load", {}, "Automatically equips every weapon of your last save when you join a new session",
+auto_load = menu.toggle(menu.my_root(), "Auto-Load", {}, "Automatically equips every weapon of your last save when you join a new session",
         function(on)
             do_autoload = on
+        end
+)
+
+from_scratch = menu.action(menu.my_root(), "Start From Scratch", {}, "Delete all your current weapons, so that you can build your loadout exactly how you want it to be",
+        function()
+            WEAPON.REMOVE_ALL_PED_WEAPONS(PLAYER.GET_PLAYER_PED(players.user()), false)
+            regen_menu()
+            util.toast("your weapons have been yeeted!")
         end
 )
 
 menu.divider(menu.my_root(), "Edit Weapons")
 
 function regen_menu()
+    attachments = {}
+    weapon_deletes = {}
     for category, weapon in pairs(weapons_table) do
         category = string.gsub(category, "_", " ")
         for weapon_name, weapon_hash in pairs(weapon) do
@@ -496,14 +508,15 @@ function regen_menu()
     end
 end
 
-function equip_comp(weapon_name, weapon_hash, attachment_hash)
+function equip_comp(category, weapon_name, weapon_hash, attachment_hash)
     WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, attachment_hash)
-    generate_attachments(weapon_name, weapon_hash)
+    generate_attachments(category, weapon_name, weapon_hash)
 end
 
 function equip_weapon(category, weapon_name, weapon_hash)
     WEAPON.GIVE_WEAPON_TO_PED(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, 10, false, true)
     util.yield(10)
+    weapon_deletes[weapon_name] = nil
     generate_for_new_weapon(category, weapon_name, weapon_hash)
 end
 
@@ -511,22 +524,46 @@ function generate_for_new_weapon(category, weapon_name, weapon_hash)
     weapons[weapon_name] = menu.list(categories[category], weapon_name, {}, "Edit attachments for " .. weapon_name,
             function()
                 WEAPON.SET_CURRENT_PED_WEAPON(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, true)
-                generate_attachments(weapon_name, weapon_hash)
+                generate_attachments(category, weapon_name, weapon_hash)
             end
     )
 end
 
-function generate_attachments(weapon_name, weapon_hash)
+function generate_attachments(category, weapon_name, weapon_hash)
+    player = PLAYER.GET_PLAYER_PED(players.user())
+    if weapon_deletes[weapon_name] == nil then
+        weapon_deletes[weapon_name] = menu.action(weapons[weapon_name], "Delete " .. weapon_name, {}, "",
+                function()
+                    WEAPON.REMOVE_WEAPON_FROM_PED(player, weapon_hash)
+                    menu.delete(weapons[weapon_name])
+                    util.toast(weapon_name .. " has been deleted")
+                    weapons[weapon_name] = menu.action(categories[category], weapon_name .. "(not equipped)", {}, "Equip " .. weapon_name,
+                            function()
+                                for a_key, a_action in pairs(attachments) do
+                                    if string.find(a_key, weapon_hash) ~= nil then
+                                        attachments[a_key] = nil
+                                    end
+                                end
+                                menu.delete(weapons[weapon_name])
+                                equip_weapon(category, weapon_name, weapon_hash)
+                                weapon_deletes[weapon_name] = nil
+                            end
+                    )
+                end
+        )
+        menu.divider(weapons[weapon_name], "Attachments")
+    end
+
     for attachment_hash, attachment_name in pairs(attachments_table) do
         if (WEAPON.DOES_WEAPON_TAKE_WEAPON_COMPONENT(weapon_hash, attachment_hash)) then
-            if (attachments[weapon_name .. attachment_name] ~= nil) then menu.delete(attachments[weapon_name .. attachment_name]) end
-            attachments[weapon_name .. attachment_name] = menu.action(weapons[weapon_name], attachment_name, {}, "Equip " .. attachment_name .. " on your " .. weapon_name,
+            if (attachments[weapon_hash .. " " .. attachment_hash] ~= nil) then menu.delete(attachments[weapon_hash .. " " .. attachment_hash]) end
+            attachments[weapon_hash .. " " .. attachment_hash] = menu.action(weapons[weapon_name], attachment_name, {}, "Equip " .. attachment_name .. " on your " .. weapon_name,
                     function()
-                        equip_comp(weapon_name, weapon_hash, attachment_hash)
+                        equip_comp(category, weapon_name, weapon_hash, attachment_hash)
                         util.yield(1)
-                        if string.find(attachment_name, "Rounds") ~= nil and WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, attachment_hash) then
+                        if string.find(attachment_name, "Rounds") ~= nil and WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(player, weapon_hash, attachment_hash) then
                             --- if the type of rounds is changed, the player needs some bullets of the new type to be able to use them
-                            WEAPON.ADD_AMMO_TO_PED(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, 10)
+                            WEAPON.ADD_AMMO_TO_PED(player, weapon_hash, 10)
                             util.toast("gave " .. weapon_name .. " some rounds due to new ammo type")
                         end
                     end
@@ -545,6 +582,7 @@ end
 categories = {}
 weapons = {}
 attachments = {}
+weapon_deletes = {}
 for category, weapon in pairs(weapons_table) do
     category = string.gsub(category, "_", " ")
     categories[category] = menu.list(menu.my_root(), category, {}, "Edit weapons of the " .. category .. " category")
