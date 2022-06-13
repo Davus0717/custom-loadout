@@ -25,19 +25,20 @@ end
 save_loadout = menu.action(menu.my_root(), "Save Loadout", {}, "Save all currently equipped weapons and their attachments to be loaded in the future",
         function()
             local charS,charE = "   ","\n"
+            local player = PLAYER.GET_PLAYER_PED(players.user())
             file = io.open(STOREDIR .. "loadout.lua", "wb")
             file:write("return {" .. charE)
             for category, weapon in pairs(weapons_table) do
                 for n, weapon_hash in pairs(weapon) do
-                    if WEAPON.HAS_PED_GOT_WEAPON(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, false) then
+                    if WEAPON.HAS_PED_GOT_WEAPON(player, weapon_hash, false) then
                         file:write(charS .. "[" .. weapon_hash .. "] = ")
-                        WEAPON.SET_CURRENT_PED_WEAPON(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, true)
+                        WEAPON.SET_CURRENT_PED_WEAPON(player, weapon_hash, true)
                         util.yield(100)
                         local num_attachments = 0
                         for attachment_hash, attachment_name in pairs(attachments_table) do
                             if (WEAPON.DOES_WEAPON_TAKE_WEAPON_COMPONENT(weapon_hash, attachment_hash)) then
                                 util.yield(10)
-                                if WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(PLAYER.GET_PLAYER_PED(players.user()), weapon_hash, attachment_hash) then
+                                if WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(player, weapon_hash, attachment_hash) then
                                     num_attachments = num_attachments + 1
                                     if num_attachments == 1 then
                                         file:write("{")
@@ -48,10 +49,14 @@ save_loadout = menu.action(menu.my_root(), "Save Loadout", {}, "Save all current
                                 end
                             end
                         end
+                        local cur_tint = WEAPON.GET_PED_WEAPON_TINT_INDEX(player, weapon_hash)
                         if num_attachments > 0 then
+                            file:write("," .. charE .. charS .. charS .. "[\"tint\"] = " .. cur_tint)
                             file:write(charE .. charS .. "}," .. charE)
                         else
-                            file:write("{nil}," .. charE)
+                            file:write("{" .. charE .. charS .. charS .. "[\"tint\"] = " .. cur_tint)
+                            file:write(charE .. charS .. "}," .. charE)
+                            --file:write("{nil}," .. charE)
                         end
                     end
                 end
@@ -72,12 +77,13 @@ load_loadout = menu.action(menu.my_root(), "Load Loadout", {"loadloadout"}, "Equ
                 local loadout_table = require("store\\" .. "loadout")
                 for w_hash, attach in pairs(loadout_table) do
                     WEAPON.GIVE_WEAPON_TO_PED(player, w_hash, 10, false, true)
-                    if attach[1] ~= nil then
                         for n, a_hash in pairs(attach) do
-                            WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(player, w_hash, a_hash)
-                            util.yield(10)
+                            if n ~= "tint" then
+                                WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(player, w_hash, a_hash)
+                                util.yield(10)
+                            end
                         end
-                    end
+                    WEAPON.SET_PED_WEAPON_TINT_INDEX(player, w_hash, attach["tint"])
                 end
                 regen_menu()
                 util.toast("loadout equipped")
@@ -107,6 +113,7 @@ menu.divider(menu.my_root(), "Edit Weapons")
 function regen_menu()
     attachments = {}
     weapon_deletes = {}
+    tints = {}
     for category, weapon in pairs(weapons_table) do
         category = string.gsub(category, "_", " ")
         for weapon_name, weapon_hash in pairs(weapon) do
@@ -170,6 +177,15 @@ function generate_attachments(category, weapon_name, weapon_hash)
                     )
                 end
         )
+
+        local tint_count = WEAPON.GET_WEAPON_TINT_COUNT(weapon_hash)
+        local cur_tint = WEAPON.GET_PED_WEAPON_TINT_INDEX(player, weapon_hash)
+        tints[weapon_hash] = menu.slider(weapons[weapon_name], "Tint", {}, "Choose the tint for your " .. weapon_name, 0, tint_count - 1, cur_tint, 1,
+                function(change)
+                    WEAPON.SET_PED_WEAPON_TINT_INDEX(player, weapon_hash, change)
+                end
+        )
+
         menu.divider(weapons[weapon_name], "Attachments")
     end
 
@@ -202,6 +218,7 @@ categories = {}
 weapons = {}
 attachments = {}
 weapon_deletes = {}
+tints = {}
 for category, weapon in pairs(weapons_table) do
     category = string.gsub(category, "_", " ")
     categories[category] = menu.list(menu.my_root(), category, {}, "Edit weapons of the " .. category .. " category")
