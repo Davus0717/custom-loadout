@@ -3,10 +3,10 @@
 ---
 --- This script utilizes some functionalities of the weapon-attachments.lua, whose author I don't know tho
 ---
---- Version 1.1.1
+--- Version 1.2
 ---
 
-util.require_natives(1627063482)--TODO: maybe update the used natives in the future? Look if it breaks anything that's actually working rn
+util.require_natives(1627063482)
 
 local STOREDIR = filesystem.store_dir() --- not using this much, consider moving it to the 2 locations it's used in..
 local LIBDIR = filesystem.scripts_dir() .. "lib\\"
