@@ -1,7 +1,7 @@
 --[[
  Created by Davus
 
- Version 1.3
+ Version 1.4
 ]]
 
 util.require_natives(1663599433)
@@ -15,7 +15,7 @@ if filesystem.exists(LIBDIR .. "component_resources.lua") then
     wpcmpTable = require("lib.custom-loadout.component_resources")
     weapons_table = util.get_weapons()
 else
-    util.toast("You didn't install the resources properly.\nMake sure component-resources.lua is in the " .. LIBDIR .. " directory")
+    util.toast("You didn't install the resources properly.\nMake sure component_resources.lua is in the " .. LIBDIR .. " directory")
     util.stop_script()
 end
 local attachments_dict = wpcmpTable[1]
@@ -39,11 +39,9 @@ save_loadout = root:action("Save Loadout", {}, "Save all currently equipped weap
                         file:write("," .. charE)
                     end
                     file:write(charS .. "[" .. weapon_hash .. "] = ")
-                    --WEAPON.SET_CURRENT_PED_WEAPON(player, weapon_hash, true)
                     local num_attachments = 0
                     for attachment_hash, _ in attachments_dict do
                         if (WEAPON.DOES_WEAPON_TAKE_WEAPON_COMPONENT(weapon_hash, attachment_hash)) then
-                            --util.yield(10)
                             if WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(player, weapon_hash, attachment_hash) then
                                 num_attachments = num_attachments + 1
                                 if num_attachments == 1 then
@@ -118,11 +116,33 @@ auto_load = root:toggle("Auto-Load", {}, "Automatically equips every weapon of y
         end
 )
 
-from_scratch = root:action("Start From Scratch", {}, "Delete your current weapons, so that you can build your loadout exactly how you want it to be",
+from_scratch = root:action("Start From Scratch", {}, "Delete your current weapons",
         function()
             WEAPON.REMOVE_ALL_PED_WEAPONS(players.user_ped(), false)
             regen_menu()
             util.toast("your weapons have been yeeted!")
+        end
+)
+
+protect_weapons = root:toggle("Protect My Weapons", {}, "Block other modders from removing your weapons or giving you new ones\n(You might want to leave this off if you plan to do missions)",
+        function(on, click_type)
+            local single_path = menu.ref_by_path("Online>Protections>Events>Raw Network Events>Remove Weapon Event>Block")
+            local all_path = menu.ref_by_path("Online>Protections>Events>Raw Network Events>Remove All Weapons Event>Block")
+            local add_path = menu.ref_by_path("Online>Protections>Events>Raw Network Events>Give Weapon Event>Block")
+            if on then
+                if single_path.value > 0 and all_path.value > 0 and add_path.value > 0 then
+                    util.toast("The protections were already set. You should be safe")
+                else
+                    single_path.value = 1
+                    all_path.value = 1
+                    add_path.value = 1
+                end
+            else
+                if click_type == 4 then return end
+                single_path.value = 0
+                all_path.value = 0
+                add_path.value = 0
+            end
         end
 )
 
@@ -164,7 +184,7 @@ function regen_menu()
     end
 end
 
-function equip_comp(category, weapon_name, weapon_hash, attachment_hash)
+function equip_comp(weapon_hash, attachment_hash)
     WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(players.user_ped(), weapon_hash, attachment_hash)
 end
 
@@ -203,11 +223,12 @@ function generate_cosmetics(weapon_hash, weapon_name)
     end
     cosmetics_list[weapon_hash] = weapons_action[weapon_hash]:list("cosmetics", {}, "",
             function()
+                local player = players.user_ped()
                 local tint_count = WEAPON.GET_WEAPON_TINT_COUNT(weapon_hash)
                 local cur_tint = WEAPON.GET_PED_WEAPON_TINT_INDEX(player, weapon_hash)
 
                 if tints_slider[weapon_hash] == nil then
-                    tints_slider[weapon_hash] = cosmetics_list[weapon_hash]:slider("Tint", {}, "Choose the tint for your " .. weapon_name, 0, tint_count - 1, cur_tint, 1,
+                    tints_slider[weapon_hash] = cosmetics_list[weapon_hash]:slider("Tint", {}, "Choose the tint for your " .. weapon_name.."\n(Note that this might not work on all weapons)", 0, tint_count - 1, cur_tint, 1,
                             function(change)
                                 WEAPON.SET_PED_WEAPON_TINT_INDEX(player, weapon_hash, change)
                             end
@@ -236,7 +257,7 @@ function generate_cosmetics(weapon_hash, weapon_name)
                     if livery_colour_slider[weapon_hash] == nil then
                         local cur_ctint_colour = WEAPON.GET_PED_WEAPON_COMPONENT_TINT_INDEX(player, weapon_hash, livery[weapon_hash])
                         if cur_ctint_colour == -1 then cur_ctint_colour = 0 end
-                        livery_colour_slider[weapon_hash] = cosmetics_list[weapon_hash]:slider("Livery Colour", {}, "change the colour of your livery", 0, 31, cur_ctint_colour, 1,
+                        livery_colour_slider[weapon_hash] = cosmetics_list[weapon_hash]:slider("Livery Colour", {}, "Change the colour of your livery\n(Note that this might not work on all liveries)", 0, 31, cur_ctint_colour, 1,
                                 function(index)
                                     if livery[weapon_hash] == nil then
                                         util.toast("There's no livery on your weapon")
@@ -252,11 +273,16 @@ function generate_cosmetics(weapon_hash, weapon_name)
                     end
                     --- livery equip actions
                     for livery_hash, label in liveries_dict do
-                        if WEAPON.DOES_WEAPON_TAKE_WEAPON_COMPONENT(weapon_hash, livery_hash) and livery_actions[weapon_hash..livery_hash] == nil then
+                        if WEAPON.DOES_WEAPON_TAKE_WEAPON_COMPONENT(weapon_hash, livery_hash) and livery_actions[weapon_hash .. livery_hash] == nil then
                             livery_actions[weapon_hash .. livery_hash] = cosmetics_list[weapon_hash]:action(util.get_label_text(label), {}, "",
                                     function()
+                                        if WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(player, weapon_hash, livery_hash) then
+                                            WEAPON.REMOVE_WEAPON_COMPONENT_FROM_PED(player, weapon_hash, livery_hash)
+                                            livery[weapon_hash] = nil
+                                            return
+                                        end
                                         livery[weapon_hash] = livery_hash
-                                        equip_comp(category, weapon_name, weapon_hash, livery_hash)
+                                        equip_comp(weapon_hash, livery_hash)
                                         WEAPON.SET_PED_WEAPON_COMPONENT_TINT_INDEX(player, weapon_hash, livery[weapon_hash], livery_colour_slider[weapon_hash].value)
                                     end
                             )
@@ -316,11 +342,15 @@ function generate_attachments(category, weapon_name, weapon_hash)
             if (attachments_action[weapon_hash .. " " .. attachment_hash] ~= nil) then attachments_action[weapon_hash .. " " .. attachment_hash]:delete() end
             attachments_action[weapon_hash .. " " .. attachment_hash] = weapons_action[weapon_hash]:action(attachment_name, {}, "Equip " .. attachment_name .. " on your " .. weapon_name,
                     function()
-                        equip_comp(category, weapon_name, weapon_hash, attachment_hash)
-                        if (string.find(attachment_label, "CLIP") ~= nil or string.find(attachment_label, "SHELL") ~= nil) and WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(players.user_ped(), weapon_hash, attachment_hash) then --last condition could be unnecessary
+                        local player = players.user_ped()
+                        if WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(player, weapon_hash, attachment_hash) then
+                            WEAPON.REMOVE_WEAPON_COMPONENT_FROM_PED(player, weapon_hash, attachment_hash)
+                            return
+                        end
+                        equip_comp(weapon_hash, attachment_hash)
+                        if (string.find(attachment_label, "CLIP") ~= nil or string.find(attachment_label, "SHELL") ~= nil) then
                             --- if the type of rounds is changed, the player needs some bullets of the new type to be able to use them
-                            WEAPON.ADD_AMMO_TO_PED(players.user_ped(), weapon_hash, 10)
-                            --util.toast("gave " .. weapon_name .. " some rounds because an ammo type was equipped")
+                            WEAPON.ADD_AMMO_TO_PED(player, weapon_hash, 10)
                         end
                     end
             )
