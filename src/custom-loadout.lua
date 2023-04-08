@@ -1,12 +1,13 @@
 --[[
  Created by Davus
 
- Version 1.4
+ Version 1.5
 ]]
 
 util.require_natives(1663599433)
 
-local STOREDIR = filesystem.store_dir() --- not using this much, consider moving it to the 2 locations it's used in..
+local STOREDIR = filesystem.store_dir()
+local LOADOUTDIR = STOREDIR .. "custom-loadout\\loadouts\\"
 local LIBDIR = filesystem.scripts_dir() .. "lib\\custom-loadout\\"
 local do_autoload = false
 local wpcmpTable = {}
@@ -20,14 +21,54 @@ else
 end
 local attachments_dict = wpcmpTable[1]
 local liveries_dict = wpcmpTable[2]
+if not filesystem.exists(LOADOUTDIR) then
+    filesystem.mkdirs(LOADOUTDIR)
+    if filesystem.exists(STOREDIR.."loadout.lua") then -- Migration of already existing loadout. Any file removal should be an explicit user action tho
+        util.toast("Copying existing loadout to new loadout directory, you can delete your loadout.lua")
+        io.copyto(STOREDIR.."loadout.lua", LOADOUTDIR.."old_loadout.lua")
+        loadout_removal = menu.my_root():action("Delete Old Loadout", {},  "Please delete your old loadout.lua, you don't need it anymore. You've got a copy of it (old_loadout)", function()
+            os.remove(STOREDIR.."loadout.lua")
+            util.toast("Deleted old loadout. It is now relocated and visible as 'old_loadout'")
+            loadout_removal:delete()
+        end)
+        loadout_removal:focus()
+    end
+end
+
+function getSPMPname(weapon)
+    local weapon_name = util.get_label_text(weapon.label_key)
+    local weapon_hash = weapon.hash
+    switch weapon_hash do
+        case 911657153:
+        case 1834241177:
+        weapon_name = weapon_name .. " (SP)"
+        break
+        case -22923932:
+        case 1171102963:
+        weapon_name = weapon_name .. " (MP)"
+    end
+    return weapon_name
+end
 
 root = menu.my_root()
 
-save_loadout = root:action("Save Loadout", {}, "Save all currently equipped weapons and their attachments to be loaded in the future",
+save_loadout = root:action("Save Loadout", {"saveloadout"}, "Save all currently equipped weapons, their attachments and cosmetic customizations",
         function()
+            util.toast("Your loadout needs a name")
+            menu.show_command_box("saveloadout ")
+        end,
+        function(filename)
+            local forbidden_chars = {'<', '>', ':', '\"', '/', '\\', '|', '?', '*'} -- at least SOME safety here.. idk, some people are weird
+            for forbidden_chars as char do
+                if filename:contains(char) then
+                    util.toast("The name contains forbidden characters, please choose a different one")
+                    return
+                end
+            end
+
             local charS,charE = "   ","\n"
             local player = players.user_ped()
-            file = io.open(STOREDIR .. "loadout.lua", "wb")
+            file = io.open(LOADOUTDIR .. filename .. ".lua", "wb")
             file:write("return {" .. charE)
             local num_weapons = 0
             for _, weapon in weapons_table do
@@ -77,17 +118,40 @@ save_loadout = root:action("Save Loadout", {}, "Save all currently equipped weap
             end
             file:write(charE .. "}")
             file:close()
-            util.toast("save complete")
+            util.toast("loadout saved as " .. filename)
+            update_saved_loadouts()
+            select_loadout:setListActionOptions(saved_loadouts)
         end
 )
 
-load_loadout = root:action("Load Loadout", {"loadloadout"}, "Equip every weapon of the last save",
+saved_loadouts = {}
+function update_saved_loadouts()
+    saved_loadouts = {}
+    for filesystem.list_files(LOADOUTDIR) as path do
+        local loadout_name = path:sub(path:rfind("\\")+1, path:rfind(".")-1)
+        saved_loadouts[#saved_loadouts+1] = loadout_name
+    end
+    if #saved_loadouts == 0 then
+        saved_loadouts = {"N/A"}
+    end
+end
+update_saved_loadouts()
+local selected_loadout = saved_loadouts[1]
+
+select_loadout = root:list_select("Selected Loadout", {}, "The loadout you want to use", saved_loadouts, 1,
+        function (index)
+            selected_loadout = saved_loadouts[index]
+        end
+)
+
+load_loadout = root:action("Load Loadout", {"loadloadout"}, "Equip your selected loadout",
         function()
-            if filesystem.exists(STOREDIR .. "loadout.lua") then
+            local loadout_path = LOADOUTDIR .. selected_loadout .. ".lua"
+            if filesystem.exists(loadout_path) then
                 player = players.user_ped()
                 WEAPON.REMOVE_ALL_PED_WEAPONS(player, false)
                 WEAPON.SET_CAN_PED_SELECT_ALL_WEAPONS(player, true)
-                local loadout = require("store\\" .. "loadout")
+                local loadout = require("store.custom-loadout.loadouts." .. selected_loadout)
                 for w_hash, attach_dict in loadout do
                     WEAPON.GIVE_WEAPON_TO_PED(player, w_hash, 10, false, true)
                     if attach_dict.attachments ~= nil then
@@ -102,15 +166,16 @@ load_loadout = root:action("Load Loadout", {"loadloadout"}, "Equip every weapon 
                     end
                 end
                 regen_menu()
-                util.toast("loadout equipped")
+                menu.trigger_commands("fillammo")
+                util.toast(selected_loadout .. " loadout equipped")
+                package.loaded["store\\custom-loadout\\loadouts\\" .. selected_loadout] = nil --- load_loadout should always get the current state of the loadout, therefore always load it again or else the last required table would be taken, as it has already been loaded before..
             else
-                util.toast("You never saved a loadout before.. what should I load *.*")
+                util.toast("Seems like this loadout doesn't exist. You either deleted it or you never saved one before *_*")
             end
-            package.loaded["store\\loadout"] = nil --- load_loadout should always get the current state of loadout.lua, therefore always load it again or else the last required table would be taken, as it has already been loaded before..
         end
 )
 
-auto_load = root:toggle("Auto-Load", {}, "Automatically equips every weapon of your last save when you join a new session",
+auto_load = root:toggle("Auto-Load", {}, "Automatically equips your selected loadout when you join a new session",
         function(on)
             do_autoload = on
         end
@@ -124,27 +189,6 @@ from_scratch = root:action("Start From Scratch", {}, "Delete your current weapon
         end
 )
 
-protect_weapons = root:toggle("Protect My Weapons", {}, "Block other modders from removing your weapons or giving you new ones\n(You might want to leave this off if you plan to do missions)",
-        function(on, click_type)
-            local single_path = menu.ref_by_path("Online>Protections>Events>Raw Network Events>Remove Weapon Event>Block")
-            local all_path = menu.ref_by_path("Online>Protections>Events>Raw Network Events>Remove All Weapons Event>Block")
-            local add_path = menu.ref_by_path("Online>Protections>Events>Raw Network Events>Give Weapon Event>Block")
-            if on then
-                if single_path.value > 0 and all_path.value > 0 and add_path.value > 0 then
-                    util.toast("The protections were already set. You should be safe")
-                else
-                    single_path.value = 1
-                    all_path.value = 1
-                    add_path.value = 1
-                end
-            else
-                if click_type == 4 then return end
-                single_path.value = 0
-                all_path.value = 0
-                add_path.value = 0
-            end
-        end
-)
 
 root:divider("Edit Weapons")
 
@@ -168,7 +212,7 @@ function regen_menu()
 
     for _, weapon in weapons_table do
         local category = weapon.category
-        local weapon_name = util.get_label_text(weapon.label_key)
+        local weapon_name = getSPMPname(weapon)
         local weapon_hash = weapon.hash
         if WEAPON.HAS_PED_GOT_WEAPON(players.user_ped(), weapon_hash, false) then
             generate_for_new_weapon(category, weapon_name, weapon_hash, false)
@@ -389,8 +433,8 @@ if do_autoload then
 end
 
 while true do
-    if NETWORK.NETWORK_IS_IN_SESSION() == false then
-        while NETWORK.NETWORK_IS_IN_SESSION() == false or util.is_session_transition_active() do
+    if not NETWORK.NETWORK_IS_IN_SESSION() then
+        while not NETWORK.NETWORK_IS_IN_SESSION() or util.is_session_transition_active() do
             util.yield(1000)
         end
         util.yield(1000)
@@ -406,5 +450,5 @@ while true do
             regen_menu()
         end
     end
-    util.yield(100)
+    util.yield(1000)
 end
