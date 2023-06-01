@@ -1,7 +1,7 @@
 --[[
  Created by Davus
 
- Version 1.5.2
+ Version 1.5.3
 ]]
 
 util.require_natives(1663599433)
@@ -43,9 +43,8 @@ end
 root = menu.my_root()
 
 save_loadout = root:action("Save Loadout", {"saveloadout"}, "Save all currently equipped weapons, their attachments and cosmetic customizations",
-    function()
-        util.toast("Your loadout needs a name")
-        menu.show_command_box("saveloadout ")
+    function(click_type)
+        menu.show_command_box_click_based(click_type, "saveloadout ")
     end,
     function(filename)
         local forbidden_chars = {'<', '>', ':', '\"', '/', '\\', '|', '?', '*'} -- at least SOME safety here.. idk, some people are weird
@@ -109,6 +108,7 @@ save_loadout = root:action("Save Loadout", {"saveloadout"}, "Save all currently 
         util.toast("loadout saved as " .. filename)
         update_saved_loadouts()
         select_loadout:setListActionOptions(saved_loadouts)
+        select_loadout.value = table.contains(saved_loadouts, filename)
     end
 )
 
@@ -124,16 +124,12 @@ function update_saved_loadouts()
     end
 end
 update_saved_loadouts()
-local selected_loadout = saved_loadouts[1]
 
-select_loadout = root:list_select("Selected Loadout", {}, "The loadout you want to use", saved_loadouts, 1,
-    function (index)
-        selected_loadout = saved_loadouts[index]
-    end
-)
+select_loadout = root:list_select("Selected Loadout", {}, "The loadout you want to use", saved_loadouts, 1, function () end)
 
 load_loadout = root:action("Load Loadout", {"loadloadout"}, "Equip your selected loadout",
     function()
+        local selected_loadout = saved_loadouts[select_loadout.value]
         local loadout_path = LOADOUTDIR .. selected_loadout .. ".lua"
         if filesystem.exists(loadout_path) then
             local player = players.user_ped()
