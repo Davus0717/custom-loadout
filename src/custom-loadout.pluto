@@ -1,7 +1,7 @@
 --[[
  Created by Davus
 
- Version 1.5.3
+ Version 1.5.5
 ]]
 
 util.require_natives(1663599433)
@@ -414,23 +414,11 @@ if do_autoload then
     load_loadout:trigger()
 end
 
-while true do
-    if not NETWORK.NETWORK_IS_IN_SESSION() then
-        while not NETWORK.NETWORK_IS_IN_SESSION() or util.is_session_transition_active() do
-            util.yield(1000)
-        end
-        util.yield(1000)
-        -- people didn't like the long loading time, but weapons/attachments don't seem to properly get deleted and loaded directly on spawn. So we'll just wait for them to do their first step
-		spawnpos = players.get_position(players.user())
-        repeat
-            local pos = players.get_position(players.user())
-            util.yield(500)
-        until spawnpos.x ~= pos.x and spawnpos.y ~= pos.y
-        if do_autoload then
-            load_loadout:trigger()
-        else
-            regen_menu()
-        end
-    end
-    util.yield(1000)
-end
+util.on_transition_finished(function()
+	util.yield(1000)
+	if do_autoload then
+		load_loadout:trigger()
+	else
+		regen_menu()
+	end
+end)
