@@ -1,14 +1,14 @@
 --[[
  Created by Davus
 
- Version 1.5.5
+ Version 1.5.6
 ]]
 
 util.require_natives(1663599433)
 
-local STOREDIR = filesystem.store_dir()
-local LOADOUTDIR = STOREDIR .. "custom-loadout\\loadouts\\"
-local LIBDIR = filesystem.scripts_dir() .. "lib\\custom-loadout\\"
+local STOREDIR <const> = filesystem.store_dir()
+local LOADOUTDIR <const> = STOREDIR .. "custom-loadout\\loadouts\\"
+local LIBDIR <const> = filesystem.scripts_dir() .. "lib\\custom-loadout\\"
 local do_autoload = false
 local wpcmpTable = {}
 local weapons_table = {}
@@ -55,12 +55,12 @@ save_loadout = root:action("Save Loadout", {"saveloadout"}, "Save all currently 
             end
         end
 
-        local charS,charE = "   ","\n"
+        local charS, charE = "   ", "\n"
         local player = players.user_ped()
         local file = io.open(LOADOUTDIR .. filename .. ".lua", "wb")
         file:write("return {" .. charE)
         local num_weapons = 0
-        for _, weapon in weapons_table do
+        for weapons_table as weapon do
             local weapon_hash = weapon.hash
 
             if WEAPON.HAS_PED_GOT_WEAPON(player, weapon_hash, false) then
@@ -70,7 +70,7 @@ save_loadout = root:action("Save Loadout", {"saveloadout"}, "Save all currently 
                 end
                 file:write(charS .. "[" .. weapon_hash .. "] = ")
                 local num_attachments = 0
-                for attachment_hash, __ in attachments_dict do
+                for attachment_hash in attachments_dict do
                     if WEAPON.DOES_WEAPON_TAKE_WEAPON_COMPONENT(weapon_hash, attachment_hash) and WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(player, weapon_hash, attachment_hash) then
                         num_attachments = num_attachments + 1
                         if num_attachments == 1 then
@@ -90,7 +90,7 @@ save_loadout = root:action("Save Loadout", {"saveloadout"}, "Save all currently 
                 end
                 file:write(charE .. charS .. charS .. "[\"tint\"] = " .. cur_tint)
                 --- Livery
-                for livery_hash, __ in liveries_dict do
+                for liveries_dict as livery_hash do
                     if WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(player, weapon_hash, livery_hash) then
                         local colour = WEAPON.GET_PED_WEAPON_COMPONENT_TINT_INDEX(player, weapon_hash, livery_hash)
                         file:write("," .. charE .. charS .. charS .. "[\"livery\"] = {")
@@ -116,7 +116,7 @@ saved_loadouts = {}
 function update_saved_loadouts()
     saved_loadouts = {}
     for filesystem.list_files(LOADOUTDIR) as path do
-        local loadout_name = path:sub(path:rfind("\\")+1, path:rfind(".")-1)
+        local loadout_name = path:sub(path:rfind("\\")+1, path:rfind("%.")-1)
         saved_loadouts[#saved_loadouts+1] = loadout_name
     end
     if #saved_loadouts == 0 then
@@ -139,7 +139,7 @@ load_loadout = root:action("Load Loadout", {"loadloadout"}, "Equip your selected
             for w_hash, attach_dict in loadout do
                 WEAPON.GIVE_WEAPON_TO_PED(player, w_hash, 10, false, false)
                 if attach_dict.attachments ~= nil then
-                    for _, hash in attach_dict.attachments do
+                    for attach_dict.attachments as hash do
                         WEAPON.GIVE_WEAPON_COMPONENT_TO_PED(player, w_hash, hash)
                     end
                 end
@@ -177,7 +177,7 @@ from_scratch = root:action("Start From Scratch", {}, "Delete your current weapon
 root:divider("Edit Weapons")
 
 function regen_menu()
-    for _, weapon in weapons_table do
+    for weapons_table as weapon do
         if weapons_action[weapon.hash] ~= nil and weapons_action[weapon.hash]:isValid() then
             weapons_action[weapon.hash]:delete()
         end
@@ -192,7 +192,7 @@ function regen_menu()
     livery_colour_slider = {}
     livery = {}
 
-    for _, weapon in weapons_table do
+    for weapons_table as weapon do
         local category = weapon.category
         local weapon_name = getSPMPname(weapon)
         local weapon_hash = weapon.hash
@@ -263,7 +263,7 @@ function generate_cosmetics(weapon_hash, weapon_name)
 
             --- livery colour
             local has_liveries = false
-            for livery_hash, _ in liveries_dict do
+            for livery_hash in liveries_dict do
                 if WEAPON.DOES_WEAPON_TAKE_WEAPON_COMPONENT(weapon_hash, livery_hash) then
                     has_liveries = true
                     break
@@ -273,7 +273,7 @@ function generate_cosmetics(weapon_hash, weapon_name)
 
             if has_liveries then
                 --- get current camo component
-                for hash, _ in liveries_dict do
+                for hash in liveries_dict do
                     if WEAPON.HAS_PED_GOT_WEAPON_COMPONENT(player, weapon_hash, hash) then
                         livery[weapon_hash] = hash
                         break
@@ -332,7 +332,7 @@ function generate_attachments(category, weapon_name, weapon_hash)
                 util.toast(weapon_name .. " has been deleted")
                 weapons_action[weapon_hash] = categories[category]:action(weapon_name .. " (not equipped)", {}, "Equip " .. weapon_name,
                     function()
-                        for a_key, _ in attachments_action do
+                        for a_key in attachments_action do
                             if string.find(a_key, weapon_hash) ~= nil then
                                 attachments_action[a_key] = nil
                             end
@@ -348,7 +348,7 @@ function generate_attachments(category, weapon_name, weapon_hash)
     end
 
     local has_attachments = false
-    for livery_hash, _ in attachments_dict do
+    for livery_hash in attachments_dict do
         if WEAPON.DOES_WEAPON_TAKE_WEAPON_COMPONENT(weapon_hash, livery_hash) then
             has_attachments = true
             break
@@ -401,7 +401,7 @@ livery_action_divider = {}
 livery_actions = {}
 livery_colour_slider = {}
 livery = {}
-for _, weapon in weapons_table do
+for weapons_table as weapon do
     local category = weapon.category
     if categories[category] == nil then
         categories[category] = root:list(category, {}, "Edit weapons of the " .. category .. " category")
